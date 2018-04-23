@@ -1,3 +1,5 @@
 numpy
 pytest
 tensorflow-gpu>=1.6
+xmltodict
+imageio

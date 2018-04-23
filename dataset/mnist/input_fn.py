@@ -5,7 +5,7 @@ import tensorflow as tf
 import model.mnist_dataset as mnist_dataset
 
 
-def train_input_fn(data_dir, params):
+def mnist_train_input_fn(data_dir, params):
     """Train input function for the MNIST dataset.
 
     Args:
@@ -20,7 +20,7 @@ def train_input_fn(data_dir, params):
     return dataset
 
 
-def test_input_fn(data_dir, params):
+def mnist_test_input_fn(data_dir, params):
     """Test input function for the MNIST dataset.
 
     Args:

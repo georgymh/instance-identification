@@ -5,8 +5,8 @@ import os
 
 import tensorflow as tf
 
-from model.input_fn import train_input_fn
-from model.input_fn import test_input_fn
+from dataset.mnist.input_fn import mnist_train_input_fn
+from dataset.imagenetvid.input_fn import imagenet_train_input_fn
 from model.model_fn import model_fn
 from model.utils import Params
 
@@ -14,8 +14,6 @@ from model.utils import Params
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_dir', default='experiments/test',
                     help="Experiment directory containing params.json")
-parser.add_argument('--data_dir', default='data/mnist',
-                    help="Directory containing the dataset")
 
 
 if __name__ == '__main__':
@@ -32,15 +30,20 @@ if __name__ == '__main__':
     tf.logging.info("Creating the model...")
     config = tf.estimator.RunConfig(tf_random_seed=230,
                                     model_dir=args.model_dir,
-                                    save_summary_steps=params.save_summary_steps)
+                                    save_summary_steps=params.save_summary_steps,
+                                    save_checkpoints_steps=1000)
     estimator = tf.estimator.Estimator(model_fn, params=params, config=config)
+
+    # Define the dataset
+    tf.logging.info("Defining the dataset...")
+    if params.dataset == 'mnist':
+        train_input_fn = lambda: mnist_train_input_fn('data/mnist', params)
+    elif params.dataset == 'imagenetvid':
+        train_input_fn = lambda: imagenet_train_input_fn(params)
+    else:
+        # Error -- dataset should be defined
+        exit(1)
 
     # Train the model
     tf.logging.info("Starting training for {} epoch(s).".format(params.num_epochs))
-    estimator.train(lambda: train_input_fn(args.data_dir, params))
-
-    # Evaluate the model on the test set
-    tf.logging.info("Evaluation on test set.")
-    res = estimator.evaluate(lambda: test_input_fn(args.data_dir, params))
-    for key in res:
-        print("{}: {}".format(key, res[key]))
+    estimator.train(train_input_fn)
