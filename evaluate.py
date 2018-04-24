@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_dir', default='experiments/test',
                     help="Experiment directory containing params.json")
 
-def run_evaluation(estimator, test_input_fn):
-    res = estimator.evaluate(test_input_fn)
+def run_evaluation(estimator, test_input_fn, eval_type):
+    res = estimator.evaluate(test_input_fn, name=eval_type)
     if "accuracy_mean" in res:
         tf.summary.scalar('accuracy_mean', res["accuracy_mean"])
     for key in res:
@@ -64,8 +64,8 @@ if __name__ == '__main__':
             # When run_once is true, checkpoint_path should point to the exact
             # checkpoint file.
             print('Evaluating {}...'.format(ckpt.model_checkpoint_path))
-            run_evaluation(estimator, train_eval_input_fn)
-            run_evaluation(estimator, val_eval_input_fn)
+            run_evaluation(estimator, train_eval_input_fn, 'train')
+            run_evaluation(estimator, val_eval_input_fn, 'val')
             break
         else:
             # When run_once is false, checkpoint_path should point to the directory
@@ -82,8 +82,8 @@ if __name__ == '__main__':
                     # Add checkpoint to set and evaluate
                     checkpoints.add(ckpt.model_checkpoint_path)
                     print('Evaluating {}...'.format(ckpt.model_checkpoint_path))
-                    run_evaluation(estimator, train_eval_input_fn)
-                    run_evaluation(estimator, val_eval_input_fn)
+                    run_evaluation(estimator, train_eval_input_fn, 'train')
+                    run_evaluation(estimator, val_eval_input_fn, 'val')
                     timeout = 0
             else:
                 print('No checkpoint file found')
