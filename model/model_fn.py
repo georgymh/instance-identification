@@ -71,7 +71,7 @@ def build_inception_resnet_model(is_training, images, params):
         return inception_resnet_v2(images)
 
     embeddings, _ = embedding_fn(images)
-    print('@@@ - embed SIZE IS {0}'.format(embeddings.get_shape().as_list()))
+    #print('@@@ - embed SIZE IS {0}'.format(embeddings.get_shape().as_list()))
     return embeddings
 
 def model_fn(features, labels, mode, params):
@@ -103,9 +103,6 @@ def model_fn(features, labels, mode, params):
         else:
             raise ValueError("Invalid model type: {0}".format(model_type))
 
-    embedding_mean_norm = tf.reduce_mean(tf.norm(embeddings, axis=1))
-    tf.summary.scalar("embedding_mean_norm", embedding_mean_norm)
-
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {'embeddings': embeddings}
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
@@ -127,12 +124,17 @@ def model_fn(features, labels, mode, params):
     # Metrics for evaluation using tf.metrics (average over whole dataset)
     # TODO: some other metrics like rank-1 accuracy?
     with tf.variable_scope("metrics"):
+        embedding_mean_norm = tf.reduce_mean(tf.norm(embeddings, axis=1))
+        avg_embedding_mean_norm, op = tf.metrics.mean(embedding_mean_norm)
         eval_metric_ops = {
-            "embedding_mean_norm": tf.metrics.mean(embedding_mean_norm),
+            "embedding_mean_norm": (avg_embedding_mean_norm, op)
         }
 
+        tf.summary.scalar('loss', loss)
+        tf.summary.scalar("embedding_mean_norm", avg_embedding_mean_norm)
         if params.triplet_strategy == "batch_all":
             eval_metric_ops['fraction_positive_triplets'] = tf.metrics.mean(fraction)
+            tf.summary.scalar('fraction_positive_triplets', fraction)
 
     if mode == tf.estimator.ModeKeys.EVAL:
         if params.model_type == 'inception_resnet_v2' and params.dataset == 'imagenetvid':
@@ -142,10 +144,6 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
     # Summaries for training
-    tf.summary.scalar('loss', loss)
-    if params.triplet_strategy == "batch_all":
-        tf.summary.scalar('fraction_positive_triplets', fraction)
-
     tf.summary.image('train_image', images, max_outputs=1)
 
     # Define training step that minimizes the loss with the Adam optimizer
