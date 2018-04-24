@@ -13,24 +13,8 @@ def imagenet_train_input_fn(params):
     Args:
         params: (Params) contains hyperparameters of the model (ex: `params.num_epochs`)
     """
-    batch_size = params.num_snippets * params.num_instances
-    iterator = lambda: get_next_training_batch(params.num_snippets, params.num_instances)
     dataset = tf.data.Dataset().from_generator(
-            iterator,
-            output_types=(tf.float32, tf.uint8),
-            output_shapes=(tf.TensorShape([batch_size, 255, 255, 3]), tf.TensorShape([batch_size])))
-    transform_fn_ = lambda image_batch, label_batch: transform_fn(
-        image_batch, label_batch, transform=params.preprocess)
-    dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
-    dataset = dataset.repeat(params.num_epochs)  # repeat for multiple epochs
-    dataset = dataset.prefetch(params.prefetch_threads)  # make sure you always a few batches ready to serve
-    return dataset
-
-
-def imagenet_train_eval_input_fn(params):
-    iterator = lambda: get_next_training_batch(params.num_snippets, params.num_instances)
-    dataset = tf.data.Dataset().from_generator(
-            iterator,
+            get_next_training_batch,
             output_types=(tf.float32, tf.uint8),
             output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
     transform_fn_ = lambda image_batch, label_batch: transform_fn(
@@ -38,23 +22,33 @@ def imagenet_train_eval_input_fn(params):
     dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
     dataset = dataset.repeat(params.num_epochs)  # repeat for multiple epochs
     dataset = dataset.prefetch(params.prefetch_threads)  # make sure you always a few batches ready to serve
-    return dataset
+    return dataset.make_one_shot_iterator().get_next()
+
+
+def imagenet_train_eval_input_fn(params):
+    dataset = tf.data.Dataset().from_generator(
+            get_next_train_eval_batch,
+            output_types=(tf.float32, tf.uint8),
+            output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
+    transform_fn_ = lambda image_batch, label_batch: transform_fn(
+        image_batch, label_batch, transform=params.preprocess)
+    dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
+    dataset = dataset.repeat(params.num_epochs)
+    dataset = dataset.prefetch(params.prefetch_threads)
+    return dataset.make_one_shot_iterator().get_next()
 
 
 def imagenet_val_eval_input_fn(params):
-    pass
-
-# def imagenet_test_input_fn(data_dir, params):
-#     """Test input function for the MNIST dataset.
-#
-#     Args:
-#         data_dir: (string) path to the data directory
-#         params: (Params) contains hyperparameters of the model (ex: `params.num_epochs`)
-#     """
-#     dataset = mnist_dataset.test(data_dir)
-#     dataset = dataset.batch(params.batch_size)
-#     dataset = dataset.prefetch(1)  # make sure you always have one batch ready to serve
-#     return dataset
+    dataset = tf.data.Dataset().from_generator(
+            get_next_val_eval_batch,
+            output_types=(tf.float32, tf.uint8),
+            output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
+    transform_fn_ = lambda image_batch, label_batch: transform_fn(
+        image_batch, label_batch, transform=params.preprocess)
+    dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
+    dataset = dataset.repeat(params.num_epochs)
+    dataset = dataset.prefetch(params.prefetch_threads)
+    return dataset.make_one_shot_iterator().get_next()
 
 
 def transform_fn(image_batch, label_batch, transform=False):
