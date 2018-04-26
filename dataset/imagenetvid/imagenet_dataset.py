@@ -5,6 +5,7 @@ import random
 
 from imageio import imread
 
+
 DATA_PATH_STR = 'data/ILSVRC2015-VID-Curation/Data/VID/'
 
 SUBDIR_MAP = {'ILSVRC2015_VID_train_0000': 'a',

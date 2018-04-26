@@ -18,10 +18,10 @@ def imagenet_train_input_fn(params):
             output_types=(tf.float32, tf.uint8),
             output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
     transform_fn_ = lambda image_batch, label_batch: transform_fn(
-        image_batch, label_batch, transform=params.preprocess)
+        image_batch, label_batch, params)
     dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
-    dataset = dataset.repeat(params.num_epochs)  # repeat for multiple epochs
-    dataset = dataset.prefetch(params.prefetch_threads)  # make sure you always a few batches ready to serve
+    dataset = dataset.repeat(params.num_epochs)
+    dataset = dataset.prefetch(params.prefetch_threads)
     return dataset.make_one_shot_iterator().get_next()
 
 
@@ -31,7 +31,7 @@ def imagenet_train_eval_input_fn(params):
             output_types=(tf.float32, tf.uint8),
             output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
     transform_fn_ = lambda image_batch, label_batch: transform_fn(
-        image_batch, label_batch, transform=params.preprocess)
+        image_batch, label_batch, params)
     dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
     dataset = dataset.repeat(params.num_epochs)
     dataset = dataset.prefetch(params.prefetch_threads)
@@ -44,19 +44,23 @@ def imagenet_val_eval_input_fn(params):
             output_types=(tf.float32, tf.uint8),
             output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
     transform_fn_ = lambda image_batch, label_batch: transform_fn(
-        image_batch, label_batch, transform=params.preprocess)
+        image_batch, label_batch, params)
     dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
     dataset = dataset.repeat(params.num_epochs)
     dataset = dataset.prefetch(params.prefetch_threads)
     return dataset.make_one_shot_iterator().get_next()
 
 
-def transform_fn(image_batch, label_batch, transform=False):
+def transform_fn(image_batch, label_batch, params):
     def img_transform(images):
-        # Normalize from [0, 255] to [0.0, 1.0]
-        images = tf.cast(images, tf.float32)
-        return images / 255.0
+        # Resize images
+        new_size = tf.constant([params.image_size, params.image_size], tf.int32)
+        images = tf.image.resize_images(image_batch, new_size)
 
-    if transform:
-        images = img_transform(image_batch)
-    return images, label_batch
+        # Normalize from [0, 255] to [-1.0, 1.0]
+        images = tf.cast(images, tf.float32)
+        return 2 * (images / 255.0) - 1.0
+
+    if params.preprocess:
+        image_batch = img_transform(image_batch)
+    return image_batch, label_batch
