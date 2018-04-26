@@ -1,21 +1,25 @@
 {
-    "learning_rate": 1e-3,
-    "batch_size": 64,
-    "num_epochs": 20,
+    "model_type": "inception_resnet_v2",
+    "warm_start_from": "./model/embeddings/pre-trained/inception_resnet_v2_2016_08_30.ckpt",
+    "learning_rate": 1e-5,
+    "num_epochs": 1,
 
-    "num_channels": 32,
-    "use_batch_norm": false,
-    "bn_momentum": 0.9,
-    "margin": 0.5,
-    "embedding_size": 64,
-    "triplet_strategy": "batch_all",
+    "margin": 0.2,
+    "triplet_strategy": "tf_batch_semi_hard",
     "squared": false,
+    "use_batch_norm": true,
 
-    "image_size": 28,
-    "num_labels": 10,
-    "train_size": 50000,
-    "eval_size": 10000,
+    "dataset": "imagenetvid",
+    "image_size": 299,
+    "image_channels": 3,
 
     "num_parallel_calls": 4,
-    "save_summary_steps": 50
+    "save_summary_steps": 50,
+    "save_checkpoints_steps": 200,
+    "eval_interval_secs": 120,
+    "eval_run_once": false,
+    "eval_timeout_secs": 2500,
+
+    "preprocess": true,
+    "prefetch_threads": 4
 }
