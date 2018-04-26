@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 
-import model.mnist_dataset as mnist_dataset
+import dataset.mnist.mnist_dataset as mnist_dataset
 
 
 def mnist_train_input_fn(data_dir, params):

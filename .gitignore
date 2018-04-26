@@ -1,4 +1,11 @@
-# Byte-compiled / optimized / DLL files
+*.meta
+*.data-00000-of-00001
+*.index
+*.ckpt
+dataset/imagenetvid/train_stats.pkl
+experiments/
+
+#Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
