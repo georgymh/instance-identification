@@ -11,7 +11,7 @@ from model.triplet_loss import batch_hard_triplet_loss
 from model.embeddings.inception_resnet import inception_resnet_v2_arg_scope
 from model.embeddings.inception_resnet import inception_resnet_v2
 
-from model.triplet_accuracy import calculate_accuracy
+from model.triplet_accuracy import calculate_accuracy, calculate_easier_accuracy
 
 
 def build_model(is_training, images, params):
@@ -63,15 +63,29 @@ def build_inception_resnet_model(is_training, images, params):
     Returns:
         output: (tf.Tensor) output of the model
     """
-    arg_scope = inception_resnet_v2_arg_scope()
-
     @functools.wraps(inception_resnet_v2)
-    def embedding_fn(images):
-      with slim.arg_scope(arg_scope):
-        return inception_resnet_v2(images)
+    def embedding_fn(images, is_training):
+      with slim.arg_scope(inception_resnet_v2_arg_scope()):
+        return inception_resnet_v2(images, is_training=is_training)
 
-    embeddings, _ = embedding_fn(images)
-    #print('@@@ - embed SIZE IS {0}'.format(embeddings.get_shape().as_list()))
+    embeddings, _ = embedding_fn(images, is_training)
+
+    # print(images.get_shape())
+    # exit(1)
+
+    # exclude = ['InceptionResnetV2/Logits', 'InceptionResnetV2/AuxLogits']
+    # variables_to_restore = slim.get_variables_to_restore(exclude = exclude)
+
+    # with tf.Session() as sess:
+    #     sess.run(tf.global_variables_initializer())
+
+    # if params.pretrained_model != "" and not is_training:
+    #     exclude = ['InceptionResnetV2/Logits', 'InceptionResnetV2/AuxLogits']
+    #     variables_to_restore = slim.get_variables_to_restore(exclude = exclude)
+    #     with tf.Session() as sess:
+    #         saver = tf.train.Saver(variables_to_restore)
+    #         saver.restore(sess, params.pretrained_model)
+
     return embeddings
 
 def model_fn(features, labels, mode, params):
@@ -94,14 +108,14 @@ def model_fn(features, labels, mode, params):
 
     # -----------------------------------------------------------
     # MODEL: define the layers of the model
-    with tf.variable_scope('model'):
-        # Compute the embeddings with the model
-        if params.model_type == 'basic':
-            embeddings = build_model(is_training, images, params)
-        elif params.model_type == 'inception_resnet_v2':
-            embeddings = build_inception_resnet_model(is_training, images, params)
-        else:
-            raise ValueError("Invalid model type: {0}".format(model_type))
+    # with tf.variable_scope('model'):
+    # Compute the embeddings with the model
+    if params.model_type == 'basic':
+        embeddings = build_model(is_training, images, params)
+    elif params.model_type == 'inception_resnet_v2':
+        embeddings = build_inception_resnet_model(is_training, images, params)
+    else:
+        raise ValueError("Invalid model type: {0}".format(model_type))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {'embeddings': embeddings}
@@ -116,30 +130,41 @@ def model_fn(features, labels, mode, params):
     elif params.triplet_strategy == "batch_hard":
         loss = batch_hard_triplet_loss(labels, embeddings, margin=params.margin,
                                        squared=params.squared)
+    elif params.triplet_strategy == "tf_batch_semi_hard":
+        normalized_embeddings = tf.nn.l2_normalize(embeddings, axis=1)
+        loss = tf.contrib.losses.metric_learning.triplet_semihard_loss(labels,
+                                normalized_embeddings, margin=params.margin)
     else:
         raise ValueError("Triplet strategy not recognized: {}".format(params.triplet_strategy))
 
     # -----------------------------------------------------------
     # METRICS AND SUMMARIES
-    # Metrics for evaluation using tf.metrics (average over whole dataset)
-    # TODO: some other metrics like rank-1 accuracy?
-    with tf.variable_scope("metrics"):
-        embedding_mean_norm = tf.reduce_mean(tf.norm(embeddings, axis=1))
-        avg_embedding_mean_norm, op = tf.metrics.mean(embedding_mean_norm)
-        eval_metric_ops = {
-            "embedding_mean_norm": (avg_embedding_mean_norm, op)
-        }
-
-        tf.summary.scalar('loss', loss)
-        tf.summary.scalar("embedding_mean_norm", avg_embedding_mean_norm)
+    # Batch metrics
+    with tf.variable_scope("batch_metrics"):
+        tf.summary.scalar('batch_loss', loss)
         if params.triplet_strategy == "batch_all":
-            eval_metric_ops['fraction_positive_triplets'] = tf.metrics.mean(fraction)
             tf.summary.scalar('fraction_positive_triplets', fraction)
 
+    # Metrics for evaluation using tf.metrics (average over whole dataset)
+    with tf.variable_scope("metrics"):
+        mean_loss, mean_loss_op = tf.metrics.mean(loss)
+        tf.summary.scalar('loss', mean_loss)
+
     if mode == tf.estimator.ModeKeys.EVAL:
+        embedding_mean_norm = tf.reduce_mean(tf.norm(embeddings, axis=1))
+        eval_metric_ops = {
+            "embedding_mean_norm": tf.metrics.mean(embedding_mean_norm),
+            "mean_loss": (mean_loss, mean_loss_op)
+        }
+
+        if params.triplet_strategy == "batch_all":
+            eval_metric_ops['fraction_positive_triplets'] = tf.metrics.mean(fraction)
+
         if params.model_type == 'inception_resnet_v2' and params.dataset == 'imagenetvid':
             accuracy = calculate_accuracy(embeddings, labels)
             eval_metric_ops["accuracy_mean"] = tf.metrics.mean(accuracy)
+            easier_accuracy = calculate_easier_accuracy(embeddings, labels)
+            eval_metric_ops["easier_accuracy_mean"] = tf.metrics.mean(easier_accuracy)
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
