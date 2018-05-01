@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     # Train the model
     tf.logging.info("Starting training for {} epoch(s).".format(params.num_epochs))
-    if params.random_guess:
+    if params.only_one_step:
         estimator.train(train_input_fn, max_steps=1)
     else:
         estimator.train(train_input_fn)
