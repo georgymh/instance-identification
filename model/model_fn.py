@@ -9,7 +9,7 @@ from model.triplet_loss import batch_all_triplet_loss
 from model.triplet_loss import batch_hard_triplet_loss
 
 from model.embeddings.inception_resnet import inception_resnet_v2_arg_scope
-from model.embeddings.inception_resnet import inception_resnet_v2
+from model.embeddings.inception_resnet import inception_resnet_v2_custom
 
 from model.triplet_accuracy import calculate_accuracy, calculate_easier_accuracy
 
@@ -63,12 +63,18 @@ def build_inception_resnet_model(is_training, images, params):
     Returns:
         output: (tf.Tensor) output of the model
     """
-    @functools.wraps(inception_resnet_v2)
+    @functools.wraps(inception_resnet_v2_custom)
     def embedding_fn(images, is_training):
       with slim.arg_scope(inception_resnet_v2_arg_scope()):
-        return inception_resnet_v2(images, is_training=is_training)
+        return inception_resnet_v2_custom(images, is_training=is_training)
 
-    embeddings, _ = embedding_fn(images, is_training)
+    logits, embeddings, _ = embedding_fn(images, is_training)
+
+    embeddings = tf.squeeze(embeddings)
+
+    # print("Logits SIZE: {0}".format(logits.get_shape()))
+    # print("Embeds SIZE: {0}".format(embeddings.get_shape()))
+    # exit(1)
 
     # print(images.get_shape())
     # exit(1)
@@ -131,7 +137,7 @@ def model_fn(features, labels, mode, params):
         loss = batch_hard_triplet_loss(labels, embeddings, margin=params.margin,
                                        squared=params.squared)
     elif params.triplet_strategy == "tf_batch_semi_hard":
-        normalized_embeddings = tf.nn.l2_normalize(embeddings, axis=1)
+        normalized_embeddings = tf.nn.l2_normalize(embeddings, axis=0)
         loss = tf.contrib.losses.metric_learning.triplet_semihard_loss(labels,
                                 normalized_embeddings, margin=params.margin)
     else:
