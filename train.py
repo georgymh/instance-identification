@@ -32,12 +32,15 @@ if __name__ == '__main__':
                                     model_dir=args.model_dir,
                                     save_summary_steps=params.save_summary_steps,
                                     save_checkpoints_steps=params.save_checkpoints_steps)
-    ws = tf.estimator.WarmStartSettings(
-        ckpt_to_initialize_from=params.warm_start_from,
-        vars_to_warm_start='.*',
-    )
-    estimator = tf.estimator.Estimator(model_fn, params=params, config=config,
-                                       warm_start_from=ws)
+    if params.warm_start_from == "":
+        estimator = tf.estimator.Estimator(model_fn, params=params, config=config)
+    else:
+        ws = tf.estimator.WarmStartSettings(
+            ckpt_to_initialize_from=params.warm_start_from,
+            vars_to_warm_start='.*',
+        )
+        estimator = tf.estimator.Estimator(model_fn, params=params, config=config,
+                                           warm_start_from=ws)
 
     # Define the dataset
     tf.logging.info("Defining the dataset...")
@@ -50,4 +53,7 @@ if __name__ == '__main__':
 
     # Train the model
     tf.logging.info("Starting training for {} epoch(s).".format(params.num_epochs))
-    estimator.train(train_input_fn)
+    if params.random_guess:
+        estimator.train(train_input_fn, max_steps=1)
+    else:
+        estimator.train(train_input_fn)
