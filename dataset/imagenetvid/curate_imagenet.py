@@ -5,8 +5,12 @@ import random
 from collections import Counter
 
 from imageio import imread
+from PIL import Image
 
-DATA_PATH_STR = 'data/ILSVRC2015-VID-Curation/Data/VID/'
+ORIGINAL_DATA_PATH_STR = 'data/ILSVRC2015/Data/VID/'
+CROPPED_DATA_PATH_STR = 'data/ILSVRC2015-VID-Curation/Data/VID/'
+RANDOM_CROPS_PATH_STR = 'data/ILSVRC2015-VID-Random/Data/VID/'
+NUM_RANDOM_CROPS = 5
 
 SUBDIR_MAP = {'ILSVRC2015_VID_train_0000': 'a',
             'ILSVRC2015_VID_train_0001': 'b',
@@ -25,6 +29,10 @@ TRAIN_EVAL_STATS_PKL = 'dataset/imagenetvid/train_eval_stats.pkl'
 
 VAL_EVAL_SET_PKL = 'dataset/imagenetvid/val_eval_set.pkl'
 VAL_EVAL_STATS_PKL = 'dataset/imagenetvid/val_eval_stats.pkl'
+
+EASY_VAL_EVAL_SET_PKL = 'dataset/imagenetvid/easy_val_eval_set4.pkl'
+EASY_VAL_EVAL_STATS_PKL = 'dataset/imagenetvid/easy_val_eval_stats4.pkl'
+
 
 def make_training_pickle(num_batches, num_snippets, num_instances):
     output = open(TRAIN_SET_PKL, 'ab')
@@ -71,8 +79,8 @@ def make_training_pickle(num_batches, num_snippets, num_instances):
 
             # Label each object with <label> (and update label += 1)
             # Add the num_instances elements into batch
-            all_images = [_get_framepath(annotation1, trackid, training=True)]
-            all_images.extend([_get_framepath(ann, trackid, training=True) \
+            all_images = [_get_cropped_framepath(annotation1, trackid, training=True)]
+            all_images.extend([_get_cropped_framepath(ann, trackid, training=True) \
                 for ann in all_frames[1:]])
 
             batch_images.extend(all_images)
@@ -138,8 +146,8 @@ def make_training_eval_pickle():
         labels = [0] + [zero_if_equal_one_otherwise(o) for o in all_objects]
 
         # Prepare batch
-        images = [_get_framepath(frame_annotation1, trackid, training=True)] + \
-          [_get_framepath(frame_annotation2, o['trackid'], training=True) for o in all_objects]
+        images = [_get_cropped_framepath(frame_annotation1, trackid, training=True)] + \
+          [_get_cropped_framepath(frame_annotation2, o['trackid'], training=True) for o in all_objects]
         batch = (images, labels)
 
         # Put this batch into the pickle
@@ -197,8 +205,8 @@ def make_validation_pickle():
         labels = [0] + [zero_if_equal_one_otherwise(o) for o in all_objects]
 
         # Prepare batch
-        images = [_get_framepath(frame_annotation1, trackid, training=False)] + \
-          [_get_framepath(frame_annotation2, o['trackid'], training=False) for o in all_objects]
+        images = [_get_cropped_framepath(frame_annotation1, trackid, training=False)] + \
+          [_get_cropped_framepath(frame_annotation2, o['trackid'], training=False) for o in all_objects]
         batch = (images, labels)
 
         # Put this batch into the pickle
@@ -207,6 +215,71 @@ def make_validation_pickle():
     # Store the metadata into another pickle
     output.close()
     output = open(VAL_EVAL_STATS_PKL, 'ab')
+    pickle.dump(stats, output, -1)
+    output.close()
+
+
+def make_easy_validation_pickle(target_num_batches=9000):
+    val_eval_dataset, stats = [], Counter()
+    output = open(EASY_VAL_EVAL_SET_PKL, 'ab')
+    snippets = _get_snippets_dict(training=False)
+
+    total_batches = 0
+    while total_batches < target_num_batches:
+        # For each random multiobject video snippets
+        for video_snippet, _ in snippets['multiple_bboxes'] + snippets['single_bboxes']:
+            # Choose a random frame
+            frame_annotation1 = _get_random_frame_annotation(video_snippet)
+
+            # Choose a random, non-occluded object in the image and call it anchor
+            anchor = _get_random_object_annotation(frame_annotation1, allow_occluded=False)
+            if anchor == None: continue
+            trackid = anchor['trackid']
+
+            found_positive = False
+            timeout = 10000
+            while not found_positive and timeout > 0:
+                timeout -= 1
+                # Find a second frame
+                frame_annotation2 = _get_random_frame_annotation(video_snippet)
+                while frame_annotation1['filename'] == frame_annotation2['filename']:
+                    frame_annotation2 = _get_random_frame_annotation(video_snippet)
+
+                # Find the same object in this frame and verify it's not occluded
+                positive = _get_object(frame_annotation2, trackid)
+                if positive == None: continue
+                # (if it is, repeat the last step until we find a good frame)
+                if positive['occluded'] == '0':
+                    found_positive = True
+            if timeout == 0 or found_positive == False: continue
+
+            # Get NUM_RANDOM_CROPS random crops from the second frame.
+            random_crops = _make_return_random_crops(frame_annotation2, NUM_RANDOM_CROPS,
+                training=False, black_area=positive, iou_limit=0.3)
+            if len(random_crops) == 0:
+                print("\tCouldn't find enough random crops...")
+                continue
+
+            # Label the first object and second object the same (anchor and positive),
+            # and the rest with another label.
+            labels = [0, 0] + [1 for _ in range(len(random_crops))]
+
+            # Prepare batch
+            images = [_get_cropped_framepath(frame_annotation1, trackid, training=False)] + \
+              [_get_cropped_framepath(frame_annotation2, trackid, training=False)] + \
+              random_crops
+            batch = (images, labels)
+
+            # Put this batch into the pickle
+            pickle.dump(batch, output, -1)
+            total_batches += len(labels)
+            stats[anchor['name']] += 1
+
+        print("Created {}/{} batches so far.".format(total_batches, target_num_batches))
+
+    # Store the metadata into another pickle
+    output.close()
+    output = open(EASY_VAL_EVAL_STATS_PKL, 'ab')
     pickle.dump(stats, output, -1)
     output.close()
 
@@ -294,10 +367,10 @@ def _get_object(annotation, trackid):
                 return obj
 
 
-def _get_framepath(annotation, track_id, training=True):
+def _get_cropped_framepath(annotation, track_id, training=True):
     """Assumes track_id is a string and not an int."""
     def _get_full_snippetpath(snippet_path):
-        return os.path.join(DATA_PATH_STR, 'train', snippet_path)
+        return os.path.join(CROPPED_DATA_PATH_STR, 'train', snippet_path)
 
     if training:
         folder1, folder2 = annotation["folder"].split('/')
@@ -313,3 +386,115 @@ def _get_framepath(annotation, track_id, training=True):
     real_filename = filename + "." + track_id + ".crop.x.jpg"
 
     return os.path.join(full_snippet_path, real_filename)
+
+
+def _get_original_framepath(annotation, training=True):
+    if training:
+        folder1, folder2 = annotation["folder"].split('/')
+        snippet_path = os.path.join(ORIGINAL_DATA_PATH_STR, 'train', folder1, folder2)
+    else:
+        snippet_path = os.path.join(ORIGINAL_DATA_PATH_STR, 'val', annotation["folder"])
+    filename = annotation['filename'] + '.JPEG'
+    return os.path.join(snippet_path, filename)
+
+
+def _make_return_random_crops(annotation, num_crops, training, size=(255, 255),
+    black_area=None, iou_limit=0.2):
+    transform_bbox = lambda bbox: (bbox[0], bbox[2], bbox[1], bbox[3])
+    framepath = _get_original_framepath(annotation, training)
+
+    im = Image.open(framepath)
+    max_x, max_y = im.size
+    w, h = size
+
+    if max_x - w < num_crops or max_y - h < num_crops:
+        return []
+
+    if black_area != None:
+        bndbox = black_area['bndbox']
+        black_bbox = [bndbox['xmin'], bndbox['xmax'], bndbox['ymin'], bndbox['ymax']]
+        black_bbox = [int(x) for x in black_bbox]
+
+    i = 0
+    random_crops = []
+    while len(random_crops) < num_crops:
+        random_x = random.randint(0, max_x - w)
+        random_y = random.randint(0, max_y - h)
+        random_bbox = [random_x, random_x + w, random_y, random_y + h]
+        if black_area != None and _iou(random_bbox, black_bbox) < iou_limit:
+            # crop the box into a new image file
+            new_file_name = "{}.{}.{}.JPEG".format(
+                annotation["folder"], annotation["filename"], str(i))
+            new_file = os.path.join(RANDOM_CROPS_PATH_STR, 'e', new_file_name)
+            im.crop(transform_bbox(random_bbox)).save(new_file)
+            # add the file path to the array
+            random_crops.append(new_file)
+        # else:
+        #     print("\tSkipping bbox... ({})".format(annotation["filename"]))
+        i += 1
+        if i > 200: break
+    return random_crops
+
+
+def _iou(bb1, bb2):
+    """
+    Calculate the Intersection over Union (IoU) of two bounding boxes.
+
+    bb1 or bb2: [x1, x2, y1, y2]
+        The (x1, y1) position is at the top left corner,
+        the (x2, y2) position is at the bottom right corner.
+    """
+    def _get_iou(bb1, bb2):
+        """
+        Calculate the Intersection over Union (IoU) of two bounding boxes.
+
+        Parameters
+        ----------
+        bb1 : dict
+            Keys: {'x1', 'x2', 'y1', 'y2'}
+            The (x1, y1) position is at the top left corner,
+            the (x2, y2) position is at the bottom right corner
+        bb2 : dict
+            Keys: {'x1', 'x2', 'y1', 'y2'}
+            The (x, y) position is at the top left corner,
+            the (x2, y2) position is at the bottom right corner
+
+        Returns
+        -------
+        float
+            in [0, 1]
+        """
+        assert bb1['x1'] < bb1['x2']
+        assert bb1['y1'] < bb1['y2']
+        assert bb2['x1'] < bb2['x2'], str(bb2['x1']) + "," + str(bb2['x2'])
+        assert bb2['y1'] < bb2['y2']
+
+        # determine the coordinates of the intersection rectangle
+        x_left = max(bb1['x1'], bb2['x1'])
+        y_top = max(bb1['y1'], bb2['y1'])
+        x_right = min(bb1['x2'], bb2['x2'])
+        y_bottom = min(bb1['y2'], bb2['y2'])
+
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+
+        # The intersection of two axis-aligned bounding boxes is always an
+        # axis-aligned bounding box
+        intersection_area = (x_right - x_left) * (y_bottom - y_top)
+
+        # compute the area of both AABBs
+        bb1_area = (bb1['x2'] - bb1['x1']) * (bb1['y2'] - bb1['y1'])
+        bb2_area = (bb2['x2'] - bb2['x1']) * (bb2['y2'] - bb2['y1'])
+
+        # compute the intersection over union by taking the intersection
+        # area and dividing it by the sum of prediction + ground-truth
+        # areas - the interesection area
+        iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
+        assert iou >= 0.0
+        assert iou <= 1.0
+        return iou
+
+    keys = ['x1', 'x2', 'y1', 'y2']
+    box1 = {k : v for k, v in zip(keys, bb1)}
+    box2 = {k : v for k, v in zip(keys, bb2)}
+    return _get_iou(box1, box2)

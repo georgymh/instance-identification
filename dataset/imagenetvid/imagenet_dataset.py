@@ -17,6 +17,7 @@ SUBDIR_MAP = {'ILSVRC2015_VID_train_0000': 'a',
 TRAIN_SET_PKL = 'dataset/imagenetvid/train_set.pkl'
 TRAIN_EVAL_SET_PKL = 'dataset/imagenetvid/train_eval_set.pkl'
 VAL_EVAL_SET_PKL = 'dataset/imagenetvid/val_eval_set.pkl'
+EASY_VAL_EVAL_SET_PKL = 'dataset/imagenetvid/easy_val_eval_set4.pkl'
 
 
 def get_next_training_batch():
@@ -29,6 +30,10 @@ def get_next_train_eval_batch():
 
 def get_next_val_eval_batch():
     yield from _get_next_batch(VAL_EVAL_SET_PKL)
+
+
+def get_next_easy_val_eval_batch():
+    yield from _get_next_batch(EASY_VAL_EVAL_SET_PKL)
 
 
 def _get_next_batch(pkl_file_path):

@@ -10,6 +10,7 @@ from dataset.mnist.input_fn import mnist_train_input_fn
 from dataset.mnist.input_fn import mnist_test_input_fn
 from dataset.imagenetvid.input_fn import imagenet_train_eval_input_fn
 from dataset.imagenetvid.input_fn import imagenet_val_eval_input_fn
+from dataset.imagenetvid.input_fn import imagenet_easy_val_eval_input_fn
 
 from model.model_fn import model_fn
 from model.utils import Params
@@ -42,15 +43,14 @@ if __name__ == '__main__':
 
     # Define the dataset
     tf.logging.info("Defining the dataset...")
+    assert params.dataset in ['mnist', 'imagenetvid'], 'Dataset must be valid!'
     if params.dataset == 'mnist':
         train_eval_input_fn = lambda: mnist_train_input_fn('data/mnist', params)
         val_eval_input_fn = lambda: mnist_test_input_fn('data/mnist', params)
     elif params.dataset == 'imagenetvid':
         train_eval_input_fn = lambda: imagenet_train_eval_input_fn(params)
         val_eval_input_fn = lambda: imagenet_val_eval_input_fn(params)
-    else:
-        # Error -- dataset should be defined
-        exit(1)
+        easy_val_eval_input_fn = lambda: imagenet_easy_val_eval_input_fn(params)
 
     # Evaluate model on the test set
     tf.logging.info("Evaluation on the test set.")
@@ -66,6 +66,7 @@ if __name__ == '__main__':
             print('Evaluating {}...'.format(ckpt.model_checkpoint_path))
             run_evaluation(estimator, train_eval_input_fn, 'train')
             run_evaluation(estimator, val_eval_input_fn, 'val')
+            run_evaluation(estimator, easy_val_eval_input_fn, 'easy_val')
             break
         else:
             # When run_once is false, checkpoint_path should point to the directory
@@ -84,6 +85,7 @@ if __name__ == '__main__':
                     print('Evaluating {}...'.format(ckpt.model_checkpoint_path))
                     run_evaluation(estimator, train_eval_input_fn, 'train')
                     run_evaluation(estimator, val_eval_input_fn, 'val')
+                    run_evaluation(estimator, easy_val_eval_input_fn, 'easy_val')
                     timeout = 0
             else:
                 print('No checkpoint file found')

@@ -5,6 +5,7 @@ import tensorflow as tf
 from dataset.imagenetvid.imagenet_dataset import get_next_training_batch
 from dataset.imagenetvid.imagenet_dataset import get_next_train_eval_batch
 from dataset.imagenetvid.imagenet_dataset import get_next_val_eval_batch
+from dataset.imagenetvid.imagenet_dataset import get_next_easy_val_eval_batch
 
 
 def imagenet_train_input_fn(params):
@@ -25,22 +26,23 @@ def imagenet_train_input_fn(params):
 
 
 def imagenet_train_eval_input_fn(params):
-    dataset = tf.data.Dataset().from_generator(
-            get_next_train_eval_batch,
-            output_types=(tf.float32, tf.uint8),
-            output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
-    transform_fn_ = lambda imgs, lbls: transform_fn(imgs, lbls, params)
-    dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
-    dataset = dataset.repeat(params.num_epochs)
-    dataset = dataset.prefetch(params.prefetch_threads)
-    return dataset.make_one_shot_iterator().get_next()
+    return _imagenet_input_fn(params, get_next_train_eval_batch)
 
 
 def imagenet_val_eval_input_fn(params):
+    return _imagenet_input_fn(params, get_next_val_eval_batch)
+
+
+def imagenet_easy_val_eval_input_fn(params):
+    return _imagenet_input_fn(params, get_next_easy_val_eval_batch)
+
+
+def _imagenet_input_fn(params, iterator, image_size=(255, 255)):
+    w, h = image_size
     dataset = tf.data.Dataset().from_generator(
-            get_next_val_eval_batch,
+            iterator,
             output_types=(tf.float32, tf.uint8),
-            output_shapes=(tf.TensorShape([None, 255, 255, 3]), tf.TensorShape([None])))
+            output_shapes=(tf.TensorShape([None, w, h, 3]), tf.TensorShape([None])))
     transform_fn_ = lambda imgs, lbls: transform_fn(imgs, lbls, params)
     dataset = dataset.map(transform_fn_, num_parallel_calls=params.prefetch_threads)
     dataset = dataset.repeat(params.num_epochs)
