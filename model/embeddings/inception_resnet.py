@@ -348,7 +348,7 @@ def inception_resnet_v2_custom(inputs, num_classes=1001, is_training=True,
           net = slim.avg_pool2d(net, kernel_size, padding='VALID',
                                 scope='AvgPool_1a_8x8')
         else:
-          net = tf.reduce_mean(net, [1, 2], keep_dims=True, name='global_pool')
+          net = tf.reduce_mean(net, [1, 2], keepdims=True, name='global_pool')
         end_points['global_pool'] = net
 
         base = net
@@ -426,7 +426,7 @@ def inception_resnet_v2(inputs, num_classes=1001, is_training=True,
           net = slim.avg_pool2d(net, kernel_size, padding='VALID',
                                 scope='AvgPool_1a_8x8')
         else:
-          net = tf.reduce_mean(net, [1, 2], keep_dims=True, name='global_pool')
+          net = tf.reduce_mean(net, [1, 2], keepdims=True, name='global_pool')
         end_points['global_pool'] = net
         if not num_classes:
           return net, end_points

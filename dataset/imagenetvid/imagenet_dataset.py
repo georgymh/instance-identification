@@ -14,7 +14,7 @@ SUBDIR_MAP = {'ILSVRC2015_VID_train_0000': 'a',
             'ILSVRC2015_VID_train_0003': 'd',
             '': 'e'}
 
-TRAIN_SET_PKL = 'dataset/imagenetvid/train_set.pkl'
+TRAIN_SET_PKL = 'dataset/imagenetvid/train_set4.pkl'
 TRAIN_EVAL_SET_PKL = 'dataset/imagenetvid/train_eval_set.pkl'
 VAL_EVAL_SET_PKL = 'dataset/imagenetvid/val_eval_set.pkl'
 EASY_VAL_EVAL_SET_PKL = 'dataset/imagenetvid/easy_val_eval_set4.pkl'
