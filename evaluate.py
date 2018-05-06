@@ -17,7 +17,7 @@ from model.utils import Params
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/test',
+parser.add_argument('--model_dir', default='experiments/base_model',
                     help="Experiment directory containing params.json")
 
 def run_evaluation(estimator, test_input_fn, eval_type):
