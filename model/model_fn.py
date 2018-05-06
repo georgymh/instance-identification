@@ -41,7 +41,7 @@ def build_model(is_training, images, params):
             out = tf.layers.max_pooling2d(out, 2, 2)
 
     # assert out.shape[1:] == [7, 7, num_channels * 2], out.shape[1:]
-    #
+
     # out = tf.reshape(out, [-1, 7 * 7 * num_channels * 2])
     out = tf.contrib.layers.flatten(out)
     with tf.variable_scope('fc_1'):
@@ -71,27 +71,6 @@ def build_inception_resnet_model(is_training, images, params):
     logits, embeddings, _ = embedding_fn(images, is_training)
 
     embeddings = tf.squeeze(embeddings)
-
-    # print("Logits SIZE: {0}".format(logits.get_shape()))
-    # print("Embeds SIZE: {0}".format(embeddings.get_shape()))
-    # exit(1)
-
-    # print(images.get_shape())
-    # exit(1)
-
-    # exclude = ['InceptionResnetV2/Logits', 'InceptionResnetV2/AuxLogits']
-    # variables_to_restore = slim.get_variables_to_restore(exclude = exclude)
-
-    # with tf.Session() as sess:
-    #     sess.run(tf.global_variables_initializer())
-
-    # if params.pretrained_model != "" and not is_training:
-    #     exclude = ['InceptionResnetV2/Logits', 'InceptionResnetV2/AuxLogits']
-    #     variables_to_restore = slim.get_variables_to_restore(exclude = exclude)
-    #     with tf.Session() as sess:
-    #         saver = tf.train.Saver(variables_to_restore)
-    #         saver.restore(sess, params.pretrained_model)
-
     return embeddings
 
 def model_fn(features, labels, mode, params):
@@ -114,7 +93,6 @@ def model_fn(features, labels, mode, params):
 
     # -----------------------------------------------------------
     # MODEL: define the layers of the model
-    # with tf.variable_scope('model'):
     # Compute the embeddings with the model
     if params.model_type == 'basic':
         embeddings = build_model(is_training, images, params)

@@ -24,37 +24,3 @@ def calculate_easier_accuracy(embeddings, labels):
     batch_size_minus_two = tf.squeeze(tf.slice(tf.shape(labels), [0] , [1])) - 2
     batch_size_minus_two = tf.cast(batch_size_minus_two, dtype=tf.int64)
     return tf.divide(num_successes, batch_size_minus_two)
-
-# N_CORRECT = 0
-# N_ITEMS_SEEN = 0
-#
-# def reset_accuracy():
-#     global N_CORRECT, N_ITEMS_SEEN
-#     N_CORRECT = 0
-#     N_ITEMS_SEEN = 0
-#
-# def update_accuracy(embeddings, labels):
-#     global N_CORRECT, N_ITEMS_SEEN
-#     anchor = embeddings[0]
-#     positive = None
-#     for e, y in zip(embeddings[1:], labels):
-#         if y == labels[0]: # zero label
-#             positive = e
-#
-#     assert positive != None
-#     pos_distance = tf.norm(anchor - positive)
-#
-#     is_successful = True
-#     for e in embeddings[1:]:
-#         if e == positive: continue
-#         neg_distance = tf.norm(anchor - e)
-#         if pos_distance < neg_distance:
-#             is_successful = False
-#
-#     if is_successful:
-#         N_CORRECT += 1
-#     N_ITEMS_SEEN += 1
-#
-# def calculate_accuracy():
-#     global N_CORRECT, N_ITEMS_SEEN
-#     return float(N_CORRECT) / N_ITEMS_SEEN
