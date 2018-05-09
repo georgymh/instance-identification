@@ -9,11 +9,11 @@ This repository contains a TensorFlow implementation of a **convolutional neural
 
 ## Overview
 
-#### Network Architecture
+### Network Architecture
 
 The model architecture consists of a fresh/pre-trained **Inception-ResNet-V2** with the **batch-hard/batch-all/batch-semi-hard triplet loss function**.
 
-#### Dataset
+### Dataset
 
 There are 4 different datasets that this model trains and validates on, all based on **ImageNet VID 2015**.
 
@@ -31,7 +31,7 @@ On the other hand, the evaluation datasets are curated the following way:
 
 Note: The `train` batches are pre-mined for efficiency but the model chooses which triplets to train on (it is still online triplet mining because the loss function chooses which triplets from each batch to train on).
 
-#### Loss functions
+### Loss functions
 
 This repository only has support for **online triplet mining**, and implements support for the following triplet strategies:
 
@@ -44,7 +44,7 @@ This repository only has support for **online triplet mining**, and implements s
 To specify which strategy to use, just set ``"triplet_strategy"`` in `params.json` to be one of the strategy names defined above.
 
 
-#### Accuracy Metrics
+### Accuracy Metrics
 
 To measure the accuracy of this model, we use two different strategies:
 
@@ -52,16 +52,16 @@ To measure the accuracy of this model, we use two different strategies:
 
 - `easy_accuracy`: the average percentage of anchor-negative distances farther than the anchor-positive distance per video snippet.
 
-#### Results
+### Results
 
 The best results obtained so far are the following:
 
- | General Accuracy | Easy Accuracy
------------ | ------------ | -------------
+| | General Accuracy | Easy Accuracy|
+|----------- | ------------ | -------------|
 **General Validation Set** | 73.28% | 86.7%
 **Random Crop Validation Set** | 95.08% | 95.75%
 
-The hyperparameters used for this model can be found in [`experiments/best_model_so_far`](experiments/best_model_so_far).
+The hyperparameters used for this model can be found in [`experiments/best_model_so_far`](experiments/best_model_so_far/params.json).
 
 ## Requirements
 
