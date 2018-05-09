@@ -1,0 +1,26 @@
+{
+    "model_type": "inception_resnet_v2",
+    "warm_start_from": "./model/embeddings/pre-trained/inception_resnet_v2_2016_08_30.ckpt",
+    "learning_rate": 0.00005,
+    "num_epochs": 1,
+    "only_one_step": false,
+
+    "margin": 0.5,
+    "triplet_strategy": "batch_hard",
+    "squared": false,
+    "use_batch_norm": true,
+
+    "dataset": "imagenetvid",
+    "image_size": 299,
+    "image_channels": 3,
+
+    "num_parallel_calls": 4,
+    "save_summary_steps": 50,
+    "save_checkpoints_steps": 300,
+    "eval_interval_secs": 60,
+    "eval_run_once": false,
+    "eval_timeout_secs": 2500,
+
+    "preprocess": true,
+    "prefetch_threads": 4
+}
