@@ -3,11 +3,13 @@ import xmltodict
 import pickle
 import random
 from collections import Counter
+from multiprocessing.pool import ThreadPool
 
 from imageio import imread
 from PIL import Image
 
 ORIGINAL_DATA_PATH_STR = 'data/ILSVRC2015/Data/VID/'
+ORIGINAL_ANNOTATIONS_PATH_STR = 'data/ILSVRC2015/Annotations/VID/'
 CROPPED_DATA_PATH_STR = 'data/ILSVRC2015-VID-Curation/Data/VID/'
 RANDOM_CROPS_PATH_STR = 'data/ILSVRC2015-VID-Random/Data/VID/'
 NUM_RANDOM_CROPS = 5
@@ -21,8 +23,8 @@ SUBDIR_MAP = {'ILSVRC2015_VID_train_0000': 'a',
 TRAIN_STATS_PKL = 'dataset/imagenetvid/train_data_stats.pkl'
 VAL_STATS_PKL = 'dataset/imagenetvid/val_data_stats.pkl'
 
-TRAIN_SET_PKL = 'dataset/imagenetvid/train_set4.pkl'
-TRAIN_SET_STATS_PKL = 'dataset/imagenetvid/train_stats4.pkl'
+TRAIN_SET_PKL = 'dataset/imagenetvid/train_set.pkl'
+TRAIN_SET_STATS_PKL = 'dataset/imagenetvid/train_stats.pkl'
 
 TRAIN_EVAL_SET_PKL = 'dataset/imagenetvid/train_eval_set.pkl'
 TRAIN_EVAL_STATS_PKL = 'dataset/imagenetvid/train_eval_stats.pkl'
@@ -30,8 +32,8 @@ TRAIN_EVAL_STATS_PKL = 'dataset/imagenetvid/train_eval_stats.pkl'
 VAL_EVAL_SET_PKL = 'dataset/imagenetvid/val_eval_set.pkl'
 VAL_EVAL_STATS_PKL = 'dataset/imagenetvid/val_eval_stats.pkl'
 
-EASY_VAL_EVAL_SET_PKL = 'dataset/imagenetvid/easy_val_eval_set4.pkl'
-EASY_VAL_EVAL_STATS_PKL = 'dataset/imagenetvid/easy_val_eval_stats4.pkl'
+EASY_VAL_EVAL_SET_PKL = 'dataset/imagenetvid/easy_val_eval_set.pkl'
+EASY_VAL_EVAL_STATS_PKL = 'dataset/imagenetvid/easy_val_eval_stats.pkl'
 
 
 def make_training_pickle(num_batches, num_snippets, num_instances):
@@ -284,6 +286,164 @@ def make_easy_validation_pickle(target_num_batches=9000):
     output.close()
 
 
+def save_training_snippets_dict():
+    if os.path.isfile(TRAIN_STATS_PKL):
+        return
+
+    TYPE = "train"
+    paths = {
+        "missing_bbox": [],
+        "multiple_bboxes": [],
+        "single_bboxes": []
+    }
+    stats = {
+        "missing_bbox": 0,
+        "multiple_bboxes": 0,
+        "single_bboxes": 0
+    }
+    annotations_base_path = os.path.join(ORIGINAL_ANNOTATIONS_PATH_STR, TYPE)
+    for dir1 in os.listdir(annotations_base_path):
+        dir1 = os.path.join(annotations_base_path + "/" + dir1)
+        for snippet_path in os.listdir(dir1):
+            snippet_path = os.path.join(dir1 + "/" + snippet_path)
+
+            dict_obj = { snippet_path : [] }
+            counts = {
+                "missing_bbox": 0,
+                "multiple_bboxes": 0,
+                "single_bboxes": 0,
+                "total": 0
+            }
+
+            for f in os.listdir(snippet_path):
+                if f[-3:] != 'xml':
+                    continue
+                filepath = snippet_path + "/" + f
+                with open(filepath) as file:
+                    fobj = xmltodict.parse(file.read())
+
+                annotation = fobj['annotation']
+                if "object" not in annotation:
+                    # no bounding boxes
+                    counts["missing_bbox"] += 1
+                    stats["missing_bbox"] += 1
+                elif isinstance(annotation["object"], list):
+                    # multiple objects in a frame
+                    counts["multiple_bboxes"] += 1
+                    stats["multiple_bboxes"] += 1
+                else:
+                    # single object in a frame
+                    counts["single_bboxes"] += 1
+                    stats["single_bboxes"] += 1
+                counts["total"] += 1
+
+            if counts["missing_bbox"] > counts["multiple_bboxes"] and \
+               counts["missing_bbox"] > counts["single_bboxes"]:
+                # missing_bbox -> discard
+                ratio = counts["missing_bbox"] / counts["total"]
+                paths["missing_bbox"].append((snippet_path, ratio))
+            elif counts["multiple_bboxes"] > counts["missing_bbox"] and \
+               counts["multiple_bboxes"] > counts["single_bboxes"]:
+                # multiple bboxes
+                ratio = counts["multiple_bboxes"] / counts["total"]
+                paths["multiple_bboxes"].append((snippet_path, ratio))
+            else:
+                # single bbox
+                ratio = counts["single_bboxes"] / counts["total"]
+                paths["single_bboxes"].append((snippet_path, ratio))
+
+    paths['all'] = [e + ('single_bboxes',) for e in paths['single_bboxes']] + \
+       [e + ('multiple_bboxes',) for e in paths['multiple_bboxes']] + \
+       [e + ('missing_bbox',) for e in paths['missing_bbox']]
+
+    paths['all_but_missing'] = [e + ('single_bboxes',) for e in paths['single_bboxes']] + \
+       [e + ('multiple_bboxes',) for e in paths['multiple_bboxes']]
+
+    # Save into Pickle
+    output = open(TRAIN_STATS_PKL, 'wb')
+    pickle.dump(stats, output, -1)
+    pickle.dump(paths, output, -1)
+    output.close()
+
+
+def save_testing_snippets_dict():
+    if os.path.isfile(VAL_STATS_PKL):
+        return
+
+    TYPE = "val"
+    paths = {
+        "missing_bbox": [],
+        "multiple_bboxes": [],
+        "single_bboxes": []
+    }
+    stats = {
+        "missing_bbox": 0,
+        "multiple_bboxes": 0,
+        "single_bboxes": 0
+    }
+    annotations_base_path = os.path.join(ANNOTATIONS_PATH_STR, TYPE)
+    for dir1 in os.listdir(annotations_base_path):
+        dir1 = os.path.join(annotations_base_path + "/" + dir1)
+        for snippet_path in os.listdir(dir1):
+            snippet_path = os.path.join(dir1 + "/" + snippet_path)
+
+            counts = {
+                "missing_bbox": 0,
+                "multiple_bboxes": 0,
+                "single_bboxes": 0,
+                "total": 0
+            }
+
+            filepath = snippet_path
+            if filepath[-3:] != 'xml':
+                continue
+            with open(filepath) as file:
+                fobj = xmltodict.parse(file.read())
+
+            annotation = fobj['annotation']
+            if "object" not in annotation:
+                # no bounding boxes
+                counts["missing_bbox"] += 1
+                stats["missing_bbox"] += 1
+            elif isinstance(annotation["object"], list):
+                # multiple objects in a frame
+                counts["multiple_bboxes"] += 1
+                stats["multiple_bboxes"] += 1
+            else:
+                # single object in a frame
+                counts["single_bboxes"] += 1
+                stats["single_bboxes"] += 1
+            counts["total"] += 1
+
+        if counts["missing_bbox"] > counts["multiple_bboxes"] and \
+           counts["missing_bbox"] > counts["single_bboxes"]:
+            # missing_bbox -> discard
+            ratio = counts["missing_bbox"] / counts["total"]
+            paths["missing_bbox"].append((dir1, ratio))
+        elif counts["multiple_bboxes"] > counts["missing_bbox"] and \
+           counts["multiple_bboxes"] > counts["single_bboxes"]:
+            # multiple bboxes
+            ratio = counts["multiple_bboxes"] / counts["total"]
+            paths["multiple_bboxes"].append((dir1, ratio))
+        else:
+            # single bbox
+            ratio = counts["single_bboxes"] / counts["total"]
+            paths["single_bboxes"].append((dir1, ratio))
+
+    paths['all'] = [e + ('single_bboxes',) for e in paths['single_bboxes']] + \
+       [e + ('multiple_bboxes',) for e in paths['multiple_bboxes']] + \
+       [e + ('missing_bbox',) for e in paths['missing_bbox']]
+
+    paths['all_but_missing'] = [e + ('single_bboxes',) for e in paths['single_bboxes']] + \
+       [e + ('multiple_bboxes',) for e in paths['multiple_bboxes']]
+
+    # Save into Pickle
+    output = open(VAL_STATS_PKL, 'wb')
+    pickle.dump(stats, output, -1)
+    pickle.dump(paths, output, -1)
+    output.close()
+
+
 def _get_snippets_dict(training=True):
     """
     Returns a structure that contains the video snippets categorized by
@@ -498,3 +658,37 @@ def _iou(bb1, bb2):
     box1 = {k : v for k, v in zip(keys, bb1)}
     box2 = {k : v for k, v in zip(keys, bb2)}
     return _get_iou(box1, box2)
+
+
+if __name__ == '__main__':
+    print("Making the snippet dictionaries...")
+    pool = ThreadPool(processes=2)
+    results = [
+        pool.apply_async(save_training_snippets_dict, []),
+        pool.apply_async(save_testing_snippets_dict, [])
+    ]
+    ans = [res.get() for res in results]
+    print("Done!")
+
+    print("Making the evaluation pickles...")
+    pool = ThreadPool(processes=3)
+    results = [
+        pool.apply_async(make_training_eval_pickle, []),
+        pool.apply_async(make_validation_pickle, []),
+        pool.apply_async(make_easy_validation_pickle, []),
+    ]
+    ans = [res.get() for res in results]
+    print("Done!")
+
+    print("Making the training pickle...")
+    pool = ThreadPool(processes=4)
+    results = [
+        # TODO: Make the parameters (num_batches, num_snippets, num_instances)
+        # be configurable using argparse.
+        pool.apply_async(make_training_pickle, [25000, 15, 3]),
+        pool.apply_async(make_training_pickle, [25000, 15, 3]),
+        pool.apply_async(make_training_pickle, [25000, 15, 3]),
+        pool.apply_async(make_training_pickle, [25000, 15, 3]),
+    ]
+    ans = [res.get() for res in results]
+    print("Done!")
